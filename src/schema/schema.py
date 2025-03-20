@@ -1,9 +1,8 @@
 from typing import Any, Literal, NotRequired
 
 from pydantic import BaseModel, Field, SerializeAsAny
+from schema.models import AllModelEnum, AWSModelName
 from typing_extensions import TypedDict
-
-from schema.models import AllModelEnum, AnthropicModelName, OpenAIModelName
 
 
 class AgentInfo(BaseModel):
@@ -11,11 +10,11 @@ class AgentInfo(BaseModel):
 
     key: str = Field(
         description="Agent key.",
-        examples=["research-assistant"],
+        examples=["edp_assistant"],
     )
     description: str = Field(
         description="Description of the agent.",
-        examples=["A research assistant for generating research papers."],
+        examples=["An EDP assistant for generating EDP expressions."],
     )
 
 
@@ -30,7 +29,7 @@ class ServiceMetadata(BaseModel):
     )
     default_agent: str = Field(
         description="Default agent used when none is specified.",
-        examples=["research-assistant"],
+        examples=["edp-assistant"],
     )
     default_model: AllModelEnum = Field(
         description="Default model used when none is specified.",
@@ -42,13 +41,13 @@ class UserInput(BaseModel):
 
     message: str = Field(
         description="User input to the agent.",
-        examples=["What is the weather in Tokyo?"],
+        examples=["What is the weather in Paris?"],
     )
     model: SerializeAsAny[AllModelEnum] | None = Field(
         title="Model",
         description="LLM Model to use for the agent.",
-        default=OpenAIModelName.GPT_4O_MINI,
-        examples=[OpenAIModelName.GPT_4O_MINI, AnthropicModelName.HAIKU_35],
+        default=AWSModelName.BEDROCK_CLAUDE_3_5_SONNET,
+        examples=[AWSModelName.BEDROCK_CLAUDE_3_5_SONNET],
     )
     thread_id: str | None = Field(
         description="Thread ID to persist and continue a multi-turn conversation.",

@@ -23,7 +23,7 @@ from schema.task_data import TaskData, TaskDataStatus
 # The app heavily uses AgentClient to interact with the agent's FastAPI endpoints.
 
 
-APP_TITLE = "Agent Service Toolkit"
+APP_TITLE = "EDP Agent Service Toolkit"
 APP_ICON = "🧰"
 
 
@@ -68,13 +68,18 @@ async def main() -> None:
     agent_client: AgentClient = st.session_state.agent_client
 
     if "thread_id" not in st.session_state:
-        thread_id = st.query_params.get("thread_id")
+        thread_id = st.query_params.get(
+            "thread_id", "847c6285-8fc9-4560-a83f-4e6285809254"
+        )
+
         if not thread_id:
             thread_id = get_script_run_ctx().session_id
             messages = []
         else:
             try:
-                messages: ChatHistory = agent_client.get_history(thread_id=thread_id).messages
+                messages: ChatHistory = agent_client.get_history(
+                    thread_id=thread_id
+                ).messages
             except AgentClientError:
                 st.error("No message history found for this Thread ID.")
                 messages = []
@@ -88,7 +93,9 @@ async def main() -> None:
         "Full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit"
         with st.popover(":material/settings: Settings", use_container_width=True):
             model_idx = agent_client.info.models.index(agent_client.info.default_model)
-            model = st.selectbox("LLM to use", options=agent_client.info.models, index=model_idx)
+            model = st.selectbox(
+                "LLM to use", options=agent_client.info.models, index=model_idx
+            )
             agent_list = [a.key for a in agent_client.info.agents]
             agent_idx = agent_list.index(agent_client.info.default_agent)
             agent_client.agent = st.selectbox(
@@ -120,7 +127,14 @@ async def main() -> None:
         def share_chat_dialog() -> None:
             session = st.runtime.get_instance()._session_mgr.list_active_sessions()[0]
             st_base_url = urllib.parse.urlunparse(
-                [session.client.request.protocol, session.client.request.host, "", "", "", ""]
+                [
+                    session.client.request.protocol,
+                    session.client.request.host,
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
             )
             # if it's not localhost, switch to https by default
             if not st_base_url.startswith("https") and "localhost" not in st_base_url:
@@ -132,16 +146,16 @@ async def main() -> None:
         if st.button(":material/upload: Share/resume chat", use_container_width=True):
             share_chat_dialog()
 
-        "[View the source code](https://github.com/JoshuaC215/agent-service-toolkit)"
-        st.caption(
-            "Made with :material/favorite: by [Joshua](https://www.linkedin.com/in/joshua-k-carroll/) in Oakland"
-        )
+        # "[View the source code](https://github.com/JoshuaC215/agent-service-toolkit)"
+        # st.caption(
+        #     "Made with :material/favorite: by [Joshua](https://www.linkedin.com/in/joshua-k-carroll/) in Oakland"
+        # )
 
     # Draw existing messages
     messages: list[ChatMessage] = st.session_state.messages
 
     if len(messages) == 0:
-        WELCOME = "Hello! I'm an AI-powered research assistant with web search and a calculator. Ask me anything!"
+        WELCOME = "Hello! I'm an AI-powered assistant convering natural language query to EDP expression!"
         with st.chat_message("ai"):
             st.write(WELCOME)
 
@@ -280,7 +294,9 @@ async def draw_messages(
                         for _ in range(len(call_results)):
                             tool_result: ChatMessage = await anext(messages_agen)
                             if tool_result.type != "tool":
-                                st.error(f"Unexpected ChatMessage type: {tool_result.type}")
+                                st.error(
+                                    f"Unexpected ChatMessage type: {tool_result.type}"
+                                )
                                 st.write(tool_result)
                                 st.stop()
 
@@ -336,7 +352,10 @@ async def handle_feedback() -> None:
     feedback = st.feedback("stars", key=latest_run_id)
 
     # If the feedback value or run ID has changed, send a new feedback record
-    if feedback is not None and (latest_run_id, feedback) != st.session_state.last_feedback:
+    if (
+        feedback is not None
+        and (latest_run_id, feedback) != st.session_state.last_feedback
+    ):
         # Normalize the feedback value (an index) to a score between 0 and 1
         normalized_score = (feedback + 1) / 5.0
 

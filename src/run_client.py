@@ -13,7 +13,9 @@ async def amain() -> None:
     print(client.info)
 
     print("Chat example:")
-    response = await client.ainvoke("Tell me a brief joke?", model="gpt-4o")
+    response = await client.ainvoke(
+        "Tell me a brief joke?", model="anthropic.claude-3-5-sonnet-20240620-v1:0"
+    )
     response.pretty_print()
 
     print("\nStream example:")
@@ -35,7 +37,9 @@ def main() -> None:
     print(client.info)
 
     print("Chat example:")
-    response = client.invoke("Tell me a brief joke?", model="gpt-4o")
+    response = client.invoke(
+        "Tell me a brief joke?", model="anthropic.claude-3-5-sonnet-20240620-v1:0"
+    )
     response.pretty_print()
 
     print("\nStream example:")

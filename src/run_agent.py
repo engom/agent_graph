@@ -4,7 +4,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 
-load_dotenv()
+_ = load_dotenv()
 
 from agents import DEFAULT_AGENT, get_agent  # noqa: E402
 
@@ -20,13 +20,12 @@ async def main() -> None:
     result["messages"][-1].pretty_print()
 
     # Draw the agent graph as png
-    # requires:
-    # brew install graphviz
-    # export CFLAGS="-I $(brew --prefix graphviz)/include"
-    # export LDFLAGS="-L $(brew --prefix graphviz)/lib"
+    # export CFLAGS="-I/usr/include/graphviz"
+    # export LDFLAGS="-L/usr/lib/graphviz"
+    # uv add pygraphviz
     # pip install pygraphviz
-    #
-    # agent.get_graph().draw_png("agent_diagram.png")
+
+    agent.get_graph().draw_png("agent_diagram.png")
 
 
 if __name__ == "__main__":

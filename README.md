@@ -1,29 +1,10 @@
-# 🧰 AI Agent Service Toolkit
-
-[![build status](https://github.com/JoshuaC215/agent-service-toolkit/actions/workflows/test.yml/badge.svg)](https://github.com/JoshuaC215/agent-service-toolkit/actions/workflows/test.yml) [![codecov](https://codecov.io/github/JoshuaC215/agent-service-toolkit/graph/badge.svg?token=5MTJSYWD05)](https://codecov.io/github/JoshuaC215/agent-service-toolkit) [![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FJoshuaC215%2Fagent-service-toolkit%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/pyproject.toml)
-[![GitHub License](https://img.shields.io/github/license/JoshuaC215/agent-service-toolkit)](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/LICENSE) [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://agent-service-toolkit.streamlit.app/)
-
-A full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit.
-
-It includes a [LangGraph](https://langchain-ai.github.io/langgraph/) agent, a [FastAPI](https://fastapi.tiangolo.com/) service to serve it, a client to interact with the service, and a [Streamlit](https://streamlit.io/) app that uses the client to provide a chat interface. Data structures and settings are built with [Pydantic](https://github.com/pydantic/pydantic).
-
-This project offers a template for you to easily build and run your own agents using the LangGraph framework. It demonstrates a complete setup from agent definition to user interface, making it easier to get started with LangGraph-based projects by providing a full, robust toolkit.
-
-**[🎥 Watch a video walkthrough of the repo and app](https://www.youtube.com/watch?v=VqQti9nGoe4)**
-
-## Overview
-
-### [Try the app!](https://agent-service-toolkit.streamlit.app/)
-
-<a href="https://agent-service-toolkit.streamlit.app/"><img src="media/app_screenshot.png" width="600"></a>
-
 ### Quickstart
 
 Run directly in python
 
 ```sh
 # At least one LLM API key is required
-echo 'OPENAI_API_KEY=your_openai_api_key' >> .env
+echo 'AWS_PROFILE=aws_profile' >> .env
 
 # uv is recommended but "pip install ." also works
 pip install uv
@@ -40,7 +21,7 @@ streamlit run src/streamlit_app.py
 Run with docker
 
 ```sh
-echo 'OPENAI_API_KEY=your_openai_api_key' >> .env
+echo 'AWS_PROFILE=aws_profile' >> .env
 docker compose watch
 ```
 
@@ -74,25 +55,13 @@ The repository is structured as follows:
 - `src/streamlit_app.py`: Streamlit app providing a chat interface
 - `tests/`: Unit and integration tests
 
-## Why LangGraph?
-
-AI agents are increasingly being built with more explicitly structured and tightly controlled [Compound AI Systems](https://bair.berkeley.edu/blog/2024/02/18/compound-ai-systems/), with careful attention to the [cognitive architecture](https://blog.langchain.dev/what-is-a-cognitive-architecture/). At the time of this repo's creation, LangGraph seems like the most advanced open source framework for building such systems, with a high degree of control as well as support for features like concurrent execution, cycles in the graph, streaming results, built-in observability, and the rich ecosystem around LangChain.
-
-I've spent a decent amount of time building with LangChain over the past year and experienced some of the commonly cited pain points. In building this out with LangGraph I found a few similar issues, but overall I like the direction and I'm happy with my choice to use it.
-
-With that said, there are several other interesting projects in this space that are worth calling out, and I hope to spend more time building with them soon:
-
-- [LlamaIndex Workflows](https://www.llamaindex.ai/blog/introducing-workflows-beta-a-new-way-to-create-complex-ai-applications-with-llamaindex) and [llama-agents](https://github.com/run-llama/llama-agents): LlamaIndex Workflows launched the day I started working on this. I've generally really liked the experience building with LlamaIndex and this looks very promising.
-- [DSPy](https://github.com/stanfordnlp/dspy): The DSPy optimizer and approach also seems super interesting and promising. But the creator [has stated](https://github.com/stanfordnlp/dspy/issues/703#issuecomment-2016598529) they aren't focusing on agents yet. I will probably experiment with building some of the specific nodes in more complex agents using DSPy in the future.
-- I know there are more springing up regularly, such as I recently came across [Prefect ControlFlow](https://github.com/PrefectHQ/ControlFlow).
-
 ## Setup and Usage
 
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/JoshuaC215/agent-service-toolkit.git
-   cd agent-service-toolkit
+   git clone 
+   cd 
    ```
 
 2. Set up environment variables:
@@ -152,31 +121,6 @@ You can also run the agent service and the Streamlit app locally without Docker,
 
 4. Open your browser and navigate to the URL provided by Streamlit (usually `http://localhost:8501`).
 
-### Development with LangGraph Studio
-
-The agent supports [LangGraph Studio](https://github.com/langchain-ai/langgraph-studio), a new IDE for developing agents in LangGraph.
-
-You can simply install LangGraph Studio, add your `.env` file to the root directory as described above, and then launch LangGraph studio pointed at the root directory. Customize `langgraph.json` as needed.
-
-### Contributing
-
-Currently the tests need to be run using the local development without Docker setup. To run the tests for the agent service:
-
-1. Ensure you're in the project root directory and have activated your virtual environment.
-
-2. Install the development dependencies and pre-commit hooks:
-
-   ```sh
-   pip install uv
-   uv sync --frozen
-   pre-commit install
-   ```
-
-3. Run the tests using pytest:
-
-   ```sh
-   pytest
-   ```
 
 ## Customization
 
@@ -204,20 +148,3 @@ response.pretty_print()
 # The librarian replied, "It rings a bell, but I'm not sure if it's here or not."
 
 ```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Roadmap
-
-- [x] Get LlamaGuard working for content moderation (anyone know a reliable and fast hosted version?)
-- [x] Add more sophisticated tools for the research assistant
-- [x] Increase test coverage and add CI pipeline
-- [x] Add support for multiple agents running on the same service, including non-chat agent
-- [x] Service metadata endpoint `/info` and dynamic app configuration
-- [ ] More ideas? File an issue or create a discussion!
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.

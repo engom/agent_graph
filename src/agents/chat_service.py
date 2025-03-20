@@ -1,6 +1,10 @@
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableConfig, RunnableLambda, RunnableSerializable
+from langchain_core.runnables import (
+    RunnableConfig,
+    RunnableLambda,
+    RunnableSerializable,
+)
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, MessagesState, StateGraph
 
@@ -39,6 +43,6 @@ agent.set_entry_point("model")
 # Always END after blocking unsafe content
 agent.add_edge("model", END)
 
-chatbot = agent.compile(
+chat = agent.compile(
     checkpointer=MemorySaver(),
 )
