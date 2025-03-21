@@ -11,8 +11,16 @@ from agents import DEFAULT_AGENT, get_agent  # noqa: E402
 agent = get_agent(DEFAULT_AGENT)
 
 
+# Find me a recipe for chocolate chip cookies
 async def main() -> None:
-    inputs = {"messages": [("user", "Find me a recipe for chocolate chip cookies")]}
+    inputs = {
+        "messages": [
+            (
+                "user",
+                "Create a column Race based on the values of different race-related variables by combining columns ",
+            )
+        ]
+    }
     result = await agent.ainvoke(
         inputs,
         config=RunnableConfig(configurable={"thread_id": uuid4()}),

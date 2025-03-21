@@ -5,6 +5,7 @@ from typing import Literal, Optional
 warnings.filterwarnings("ignore", message="'api' backend is deprecated")
 
 from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import (
@@ -17,7 +18,7 @@ from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.managed import RemainingSteps
 from langgraph.prebuilt import ToolNode
 
-from agents.tools import calculator
+from agents.tools import calculator, code_generator
 from core import get_model, settings
 
 
@@ -30,27 +31,55 @@ class AgentState(MessagesState, total=False):
 def setup_tools():
     """Initialize and configure tools with error handling."""
     try:
-        web_search = DuckDuckGoSearchResults(name="WebSearch")
-        return [web_search, calculator]
+        wrapper = DuckDuckGoSearchAPIWrapper(
+            safesearch="moderate",
+            backend="auto",
+        )
+        web_search = DuckDuckGoSearchResults(name="WebSearch")  #  api_wrapper=wrapper)
+        return [web_search, code_generator, calculator]
     except Exception as e:
         print(f"Error setting up tools: {e}")
-        return [calculator]
+        return [code_generator, calculator]
 
 
 def get_system_instructions() -> str:
-    """Generate system instructions with current date."""
-    current_date = datetime.now().strftime("%B %d, %Y")
+    """Generate system instructions with current date and EDP/SolveBio expression generating capabilities."""
     return f"""
-    You are a helpful research assistant with the ability to search the web and use other tools.
-    Today's date is {current_date}.
+    You are a helpful EDP coding assistant with expertise in data processing expressions and web search capabilities.
+    
+    **EDP/SolveBio Expressions** are Python-like formulas used in the QuartzBio platform for data manipulation, analysis, and querying. Key points include:
+
+    1. **Purpose**: Designed to pull data, calculate statistics, and run algorithms within the QuartzBio EDP platform.
+    2. **Syntax**: Uses Python-like syntax, making it intuitive for users familiar with Python.
+    3. **Built-in Functions**: Includes a library of functions tailored for EDP datasets and common data processing tasks.
+    4. **Flexibility**: Allows access to and manipulation of data across datasets, performing calculations, and applying complex logic.
+    5. **Dataset Operations**: Enables operations like retrieving the total number of records in a dataset.
+
+    These expressions are essential for interacting with data in a flexible and powerful way, combining Python familiarity with specialized functions for data science and bioinformatics tasks.
 
     NOTE: THE USER CAN'T SEE THE TOOL RESPONSE.
 
     A few things to remember:
-    - Please include markdown-formatted links to any citations used in your response. Only include one
-    or two citations per response unless more are needed. ONLY USE LINKS RETURNED BY THE TOOLS.
-    - Use calculator tool with numexpr to answer math questions. The user does not understand numexpr,
-      so for the final response, use human readable format - e.g. "300 * 200", not "(300 \\times 200)".
+    - When handling EDP expressions:
+        * Generate single-line expressions (can be formatted multi-line for readability)
+        * Support basic Python operations and built-in functions (len, min, max, sum, round, range)
+        * Include SolveBio-specific functions (dataset_field_stats, datetime_format, etc.)
+        * Handle various data types (string, text, date, integer, float, boolean, object)
+        * Validate expression syntax before returning
+        * Ensure proper error handling for null values and edge cases
+
+    - For general assistance:
+        * Please include markdown-formatted links to any citations used in your response. Only include one
+          or two citations per response unless more are needed. ONLY USE LINKS RETURNED BY THE TOOLS.
+        * Use calculator tool with numexpr to answer math questions. The user does not understand numexpr,
+          so for the final response, use human readable format - e.g. "300 * 200", not "(300 \\times 200)".
+        
+    - When generating EDP expressions:
+        * Always validate dataset field references
+        * Include proper type casting when necessary
+        * Handle null values gracefully
+        * Follow SolveBio expression syntax rules
+        * Provide clear comments for complex expressions
     """
 
 
