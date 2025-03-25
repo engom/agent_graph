@@ -19,7 +19,7 @@ from langgraph.managed import RemainingSteps
 from langgraph.prebuilt import ToolNode
 
 from agents.tools import calculator, code_generator
-from core import get_model, settings
+from core import llm, settings
 
 
 class AgentState(MessagesState, total=False):
@@ -36,10 +36,10 @@ def setup_tools():
             backend="auto",
         )
         web_search = DuckDuckGoSearchResults(name="WebSearch")  #  api_wrapper=wrapper)
-        return [web_search, code_generator, calculator]
+        return [code_generator, web_search]
     except Exception as e:
         print(f"Error setting up tools: {e}")
-        return [code_generator, calculator]
+        return [calculator]
 
 
 def get_system_instructions() -> str:
@@ -80,12 +80,23 @@ def get_system_instructions() -> str:
         * Handle null values gracefully
         * Follow SolveBio expression syntax rules
         * Provide clear comments for complex expressions
+        
+    - Output the final should be a valid EDP/SolveBio expression and/or a web search result.
+    - If the user asks for a web search, use the web search tool to find the information and return the result.
+    - If the user asks for a calculation, use the calculator tool to perform the calculation and return the result.
+    - If the user asks for an EDP expression, generate the expression and return the result using code generator tool.
+    - If the user asks for a code snippet, use the code generator tool to generate the code and return the result.
+    
+    The final response should include:
+      * expression in SolveBio syntax.
+      * explanation of the expression.
+      
     """
 
 
 def wrap_model(model: BaseChatModel) -> RunnableSerializable[AgentState, AIMessage]:
     """Wrap the model with tools and system instructions."""
-    model = model.bind_tools(setup_tools())
+    model = model.bind_tools(setup_tools(), tool_choice="auto")
     preprocessor = RunnableLambda(
         lambda state: [SystemMessage(content=get_system_instructions())]
         + state["messages"],
@@ -98,7 +109,7 @@ async def acall_model(state: AgentState, config: RunnableConfig) -> AgentState:
     """Handle model calls with proper error handling and step management."""
     try:
         model_name = config["configurable"].get("model", settings.DEFAULT_MODEL)
-        m = get_model(model_name)
+        m = llm.get_model(model_name)
         model_runnable = wrap_model(m)
         response = await model_runnable.ainvoke(state, config)
 

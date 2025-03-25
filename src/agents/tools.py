@@ -1,31 +1,147 @@
+import asyncio
+import json
 import math
 import re
 import subprocess
+from asyncio import Semaphore
+from functools import lru_cache
 
+import boto3
 import numexpr
-from langchain_aws import ChatBedrock
-from langchain_core.tools import BaseTool, tool
+from botocore.config import Config
 
-model_kwargs = {
-    "temperature": 0.25,
-    "max_tokens": 4096,
-    "top_p": 1,
-    "top_k": 250,
-    "stop_sequences": ["\n\nHuman:", "\n\nAssistant:"],  # Add Assistant stop sequence
-}
+# from langchain_aws import ChatBedrock
+from langchain_core.tools import BaseTool, StructuredTool, tool
 
-llm_ = ChatBedrock(
-    model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+# Limit concurrent requests
+sem = Semaphore(5)
+
+# Create a global boto3 client to reuse connections
+bedrock_runtime = boto3.client(
+    service_name="bedrock-runtime",
     region_name="us-west-2",
-    credentials_profile_name="AWS_AI_Access-814020624271",
-    model_kwargs=model_kwargs,
-    streaming=True,  # Add streaming support
+    config=Config(retries=dict(max_attempts=3), connect_timeout=5, read_timeout=30),
 )
 
 
-# @tool
+async def generate_(bedrock_runtime, model_id, system_prompt, messages):
+    async with sem:  # Using the existing semaphore
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 4096,
+                "system": system_prompt,
+                "messages": messages,
+                "temperature": 0.5,
+            }
+        )
+
+        response = await asyncio.to_thread(
+            bedrock_runtime.invoke_model, body=body, modelId=model_id
+        )
+        response_body = json.loads(response.get("body").read())
+        return response_body
+
+
+@lru_cache(maxsize=100)
 def generate_code(query: str) -> str:
-    """Generate EDP/SolvBio (Entreprise Data Platform) code from natural language queries.
+    """Generates Python code for a given natural language task using SolveBio Expression syntax rules"""
+    query = query.strip().replace("\n", "")
+
+    prompt = """You are an expert in generating Python code for EDP/SolvBio.
+    Follow these SolveBio Expression syntax rules:
+    1. Basic Structure:
+    - Expressions are string-based formulas
+    - Support for context variables without declaration
+
+    2. Data Types:
+    - string: Use double quotes for string literals
+    - integer: Direct numbers (1, 2, 3)
+    - float: Decimal numbers (1.0, 2.5)
+    - boolean: true, false
+    - list: [1, 2, 3] or ["a", "b", "c"]
+
+    3. Operators:
+    - Arithmetic: +, -, *, /, %
+    - Comparison: ==, !=, >, <, >=, <=
+    - Logical: and, or, not
+    - String concat: + (for strings)
+
+    4. Built-in Functions:
+    - len(): Length of strings or lists
+    - min(), max(): For numbers or strings
+    - sum(): For numeric lists
+    - round(): For numbers
+    - range(): For creating number sequences
+
+    5. Field References:
+    - Direct reference: field_name
+    - No $ or special prefixes needed
+
+    The code should:
+    - Follow SolveBio syntax rules (NO 'def' or 'return')
+    - Include proper type casting when necessary
+    - Handle null values gracefully
+
+    Output only the code, no explanations.
+    """
+    model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    system_prompt = prompt
+    user_message = {"role": "user", "content": query}
+    messages = [user_message]
+
+    try:
+        # Run the async function in a new event loop
+        response = asyncio.run(
+            generate_(bedrock_runtime, model_id, system_prompt, messages)
+        )
+
+        code_gen = response.get("content")[0].get("text")
+        print("Code generator output code:")
+        print(code_gen)
+
+        return code_gen.strip()
+    except Exception as e:
+        return f"Error generating code: {str(e)}"
+
+
+# @tool
+def calculator(expression: str) -> str:
+    """Calculates a math expression using numexpr.
+
+    Useful for when you need to answer questions about math using numexpr.
+    This tool is only for math questions and nothing else. Only input
+    math expressions.
+
+    Args:
+        expression (str): A valid numexpr formatted math expression.
+
+    Returns:
+        str: The result of the math expression.
+    """
+
+    try:
+        local_dict = {"pi": math.pi, "e": math.e}
+        output = str(
+            numexpr.evaluate(
+                expression.strip(),
+                global_dict={},  # restrict access to globals
+                local_dict=local_dict,  # add common mathematical functions
+            )
+        )
+        return re.sub(r"^\[|\]$", "", output)
+    except Exception as e:
+        raise ValueError(
+            f'calculator("{expression}") raised error: {e}.'
+            " Please try again with a valid numerical expression"
+        )
+
+
+calculator: BaseTool = tool(calculator)
+calculator.name = "calculator"
+
+
+description = """Generate EDP/SolvBio (Entreprise Data Platform) code from natural language queries.
 
     Useful for when you need to address questions about data processing tasks using SolveBio.
     This function converts natural language queries into SolveBio-compatible expressions,
@@ -83,173 +199,84 @@ def generate_code(query: str) -> str:
         )
     """
 
-    prompt = f"""
-    Generate a Python code snippet for EDP/SolvBio that addresses this task: {query}
-    
-    Follow these SolveBio Expression syntax rules:
-    1. Basic Structure:
-       - Expressions are string-based formulas
-       - Support for context variables without declaration
-    
-    2. Data Types:
-       - string: Use double quotes for string literals
-       - integer: Direct numbers (1, 2, 3)
-       - float: Decimal numbers (1.0, 2.5)
-       - boolean: true, false
-       - list: [1, 2, 3] or ["a", "b", "c"]
-    
-    3. Operators:
-       - Arithmetic: +, -, *, /, %
-       - Comparison: ==, !=, >, <, >=, <=
-       - Logical: and, or, not
-       - String concat: + (for strings)
-    
-    4. Built-in Functions:
-       - len(): Length of strings or lists
-       - min(), max(): For numbers or strings
-       - sum(): For numeric lists
-       - round(): For numbers
-       - range(): For creating number sequences
-    
-    5. Field References:
-       - Direct reference: field_name
-       - No $ or special prefixes needed
-    
-    The code should:
-    - Follow SolveBio syntax rules (NO 'def' or 'return')
-    - Include proper type casting when necessary
-    - Handle null values gracefully
-    
-    Output only the code, no explanations.
-    """
-
-    result = llm_.invoke(prompt)
-
-    # Better code block extraction
-    code = result.content
-    if "```python" in code:
-        code = code.split("```python")[1].split("```")[0]
-    elif "```" in code:
-        code = code.split("```")[1]
-
-    # Clean up the code
-    code = code.strip()
-
-    # Save the cleaned code
-    with open("./temp.py", "w") as file:
-        file.write(code)
-
-    return result.content
+# Update the StructuredTool configuration
+code_generator = StructuredTool.from_function(
+    func=generate_code,
+    name="code_generator",
+    description=description,
+)
 
 
-# @tool
-def test_code(query: str) -> str:
-    """Tests a given code and output results"""
-    try:
-        # Read the generated code
-        with open("./temp.py", "r") as file:
-            code_to_test = file.read()
+# # @tool
+# def test_code(query: str) -> str:
+#     """Tests a given code and output results"""
+#     try:
+#         # Read the generated code
+#         with open("./temp.py", "r") as file:
+#             code_to_test = file.read()
 
-        # Generate test code with SolveBio-specific test cases
-        test_prompt = f"""
-        Create a test script for SolveBio Expression that:
-        1. Imports necessary modules:
-           from solvebio import Expression
-        
-        2. Creates sample test cases with these patterns:
-           # Test static expressions
-           expr = Expression('your_expression')
-           result = expr.evaluate(data_type='appropriate_type', is_list=False)
-           
-           # Test with context variables
-           expr = Expression('expression_with_fields')
-           data = {{'field1': 'value1', 'field2': 'value2'}}
-           result = expr.evaluate(data=data, data_type='appropriate_type', is_list=False)
-        
-        3. Tests the following code with appropriate inputs:
-        
-        {code_to_test}
-        
-        Output only the test code, no explanations.
-        """
+#         # Generate test code with SolveBio-specific test cases
+#         test_prompt = f"""
+#         Create a test script for SolveBio Expression that:
+#         1. Imports necessary modules:
+#            from solvebio import Expression
 
-        test_result = llm_.invoke(test_prompt)
+#         2. Creates sample test cases with these patterns:
+#            # Test static expressions
+#            expr = Expression('your_expression')
+#            result = expr.evaluate(data_type='appropriate_type', is_list=False)
 
-        # Extract and clean test code
-        test_code = test_result.content
-        if "```python" in test_code:
-            test_code = test_code.split("```python")[1].split("```")[0]
-        elif "```" in test_code:
-            test_code = test_code.split("```")[1]
+#            # Test with context variables
+#            expr = Expression('expression_with_fields')
+#            data = {{'field1': 'value1', 'field2': 'value2'}}
+#            result = expr.evaluate(data=data, data_type='appropriate_type', is_list=False)
 
-        test_code = test_code.strip()
+#         3. Tests the following code with appropriate inputs:
 
-        # Save test code
-        with open("./temp-test.py", "w") as file_test:
-            file_test.write(test_code)
+#         {code_to_test}
 
-        # Execute test with timeout and capture output
-        result = subprocess.run(
-            ["python", "temp-test.py"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=True,
-        )
+#         Output only the test code, no explanations.
+#         """
 
-        return result.stdout
+#         test_result = llm_.invoke(test_prompt)
 
-    except subprocess.TimeoutExpired:
-        return "Error: Code execution timed out after 10 seconds"
+#         # Extract and clean test code
+#         test_code = test_result.content
+#         if "```python" in test_code:
+#             test_code = test_code.split("```python")[1].split("```")[0]
+#         elif "```" in test_code:
+#             test_code = test_code.split("```")[1]
 
-    except subprocess.CalledProcessError as e:
-        return f"Error executing code: {e.stderr}"
+#         test_code = test_code.strip()
 
-    except Exception as e:
-        return f"Error testing code: {str(e)}"
+#         # Save test code
+#         with open("./temp-test.py", "w") as file_test:
+#             file_test.write(test_code)
 
-    finally:
-        # Clean up temp files
-        subprocess.run(["rm", "temp.py", "temp-test.py"], capture_output=True)
+#         # Execute test with timeout and capture output
+#         result = subprocess.run(
+#             ["python", "temp-test.py"],
+#             capture_output=True,
+#             text=True,
+#             timeout=10,
+#             check=True,
+#         )
 
+#         return result.stdout
 
-# @tool
-def calculator(expression: str) -> str:
-    """Calculates a math expression using numexpr.
+#     except subprocess.TimeoutExpired:
+#         return "Error: Code execution timed out after 10 seconds"
 
-    Useful for when you need to answer questions about math using numexpr.
-    This tool is only for math questions and nothing else. Only input
-    math expressions.
+#     except subprocess.CalledProcessError as e:
+#         return f"Error executing code: {e.stderr}"
 
-    Args:
-        expression (str): A valid numexpr formatted math expression.
+#     except Exception as e:
+#         return f"Error testing code: {str(e)}"
 
-    Returns:
-        str: The result of the math expression.
-    """
+#     finally:
+#         # Clean up temp files
+#         subprocess.run(["rm", "temp.py", "temp-test.py"], capture_output=True)
 
-    try:
-        local_dict = {"pi": math.pi, "e": math.e}
-        output = str(
-            numexpr.evaluate(
-                expression.strip(),
-                global_dict={},  # restrict access to globals
-                local_dict=local_dict,  # add common mathematical functions
-            )
-        )
-        return re.sub(r"^\[|\]$", "", output)
-    except Exception as e:
-        raise ValueError(
-            f'calculator("{expression}") raised error: {e}.'
-            " Please try again with a valid numerical expression"
-        )
-
-
-calculator: BaseTool = tool(calculator)
-calculator.name = "calculator"
-
-code_generator: BaseTool = tool(generate_code)
-code_generator.name = "code_generator"  # Use lowercase with underscore
 
 # if __name__ == "__main__":
 #     code_gen = generate_code(

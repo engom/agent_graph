@@ -17,7 +17,7 @@ async def main() -> None:
         "messages": [
             (
                 "user",
-                "Create a column Race based on the values of different race-related variables by combining columns ",
+                "Translate VISITC values to VISITN using visit code list Dataset. ",
             )
         ]
     }

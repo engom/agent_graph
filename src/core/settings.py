@@ -36,13 +36,6 @@ class Settings(BaseSettings):
     DEFAULT_MODEL: AllModelEnum | None = None  # type: ignore[assignment]
     AVAILABLE_MODELS: set[AllModelEnum] = set()  # type: ignore[assignment]
 
-    LANGCHAIN_TRACING_V2: bool = False
-    LANGCHAIN_PROJECT: str = "default"
-    LANGCHAIN_ENDPOINT: Annotated[str, BeforeValidator(check_str_is_http)] = (
-        "https://api.smith.langchain.com"
-    )
-    LANGCHAIN_API_KEY: SecretStr | None = None
-
     def model_post_init(self, __context: Any) -> None:
         api_keys = {
             Provider.AWS: self.USE_AWS_BEDROCK,
@@ -55,7 +48,7 @@ class Settings(BaseSettings):
             match provider:
                 case Provider.AWS:
                     if self.DEFAULT_MODEL is None:
-                        self.DEFAULT_MODEL = AWSModelName.BEDROCK_CLAUDE_3_5_SONNET
+                        self.DEFAULT_MODEL = AWSModelName.BEDROCK_CLAUDE_3_5_SONNET_V2
                     self.AVAILABLE_MODELS.update(set(AWSModelName))
                 case _:
                     raise ValueError(f"Unknown provider: {provider}")
@@ -70,7 +63,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
 print(settings.AWS_PROFILE)
 print(settings.AWS_REGION)
 print(settings.USE_AWS_BEDROCK)
 print(settings.DEFAULT_MODEL)
+print(settings.AVAILABLE_MODELS)
+print(settings.BASE_URL)
+print(settings.is_dev())

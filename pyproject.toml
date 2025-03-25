@@ -1,12 +1,10 @@
 [project]
-name = "agent-service-toolkit"
+name = "agent-service"
 version = "0.1.0"
-description = "Full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit"
+description = "Full toolkit for running an AI agent service built with LangGraph, and FastAPI"
 readme = "README.md"
-authors = [{ name = "Joshua Carroll", email = "carroll.joshk@gmail.com" }]
+authors = [{ name = "Ngom Elhadji", email = "elhadji.ngom@precisonformedicine.com" }]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: MIT License",
     "Framework :: FastAPI",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,7 +24,7 @@ dependencies = [
     "langchain-google-genai ~=2.0.5",
     "langchain-groq ~=0.2.1",
     "langchain-aws ~=0.2.7",
-    "langgraph ~=0.2.53",
+    "langgraph~=0.2.53",
     "langgraph-checkpoint-sqlite ~=2.0.1",
     "langsmith ~=0.1.145",
     "numexpr ~=2.10.1",
@@ -40,6 +38,7 @@ dependencies = [
     "tiktoken >=0.8.0", # python 3.13 support
     "uvicorn ~=0.32.1",
     "pygraphviz>=1.14",
+    "boto3>=1.35.54",
 ]
 
 [dependency-groups]
@@ -72,6 +71,3 @@ extend-select = ["I", "U"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 asyncio_default_fixture_loop_scope = "function"
-
-[tool.pytest_env]
-OPENAI_API_KEY = "sk-fake-openai-key"

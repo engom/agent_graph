@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
+from langgraph.graph.state import CompiledStateGraph
+
 from agents.bg_task_agent.bg_task_agent import bg_task_agent
 from agents.chat_service import chat
 from agents.edp_assistant import edp_assistant
-from langgraph.graph.state import CompiledStateGraph
 from schema import AgentInfo
 
 DEFAULT_AGENT = "edp-assistant"

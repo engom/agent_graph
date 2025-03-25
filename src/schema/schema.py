@@ -1,8 +1,9 @@
 from typing import Any, Literal, NotRequired
 
 from pydantic import BaseModel, Field, SerializeAsAny
-from schema.models import AllModelEnum, AWSModelName
 from typing_extensions import TypedDict
+
+from schema.models import AllModelEnum, AWSModelName
 
 
 class AgentInfo(BaseModel):
@@ -46,8 +47,11 @@ class UserInput(BaseModel):
     model: SerializeAsAny[AllModelEnum] | None = Field(
         title="Model",
         description="LLM Model to use for the agent.",
-        default=AWSModelName.BEDROCK_CLAUDE_3_5_SONNET,
-        examples=[AWSModelName.BEDROCK_CLAUDE_3_5_SONNET],
+        default=AWSModelName.BEDROCK_CLAUDE_3_5_SONNET_V2,
+        examples=[
+            AWSModelName.BEDROCK_CLAUDE_3_5_SONNET_V2,
+            AWSModelName.BEDROCK_CLAUDE_3_5_SONNET_V1,
+        ],
     )
     thread_id: str | None = Field(
         description="Thread ID to persist and continue a multi-turn conversation.",
