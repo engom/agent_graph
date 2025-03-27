@@ -3,10 +3,13 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.service
+    container_name: backend_service
     ports:
-      - "80:80"
+      - "8080:8080"
     env_file:
       - .env
+    volumes:
+    - ${AWS_CONFIG_DIR:?error}/.aws:/root/.aws
     develop:
       watch:
         - path: src/agents/
@@ -18,17 +21,23 @@ services:
         - path: src/service/
           action: sync+restart
           target: /app/service/
+    networks:
+      - app_network   
 
   streamlit_app:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
+    container_name: frontend_service
     ports:
       - "8501:8501"
     depends_on:
       - agent_service
+    env_file:
+      - .env
     environment:
-      - AGENT_URL=http://agent_service
+      - AGENT_URL=${AGENT_URL:-http://agent_service}
+      
     develop:
       watch:
         - path: src/client/
@@ -40,3 +49,11 @@ services:
         - path: src/streamlit_app.py
           action: sync+restart
           target: /app/streamlit_app.py
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+  

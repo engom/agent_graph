@@ -41,7 +41,11 @@ logger = logging.getLogger(__name__)
 def verify_bearer(
     http_auth: Annotated[
         HTTPAuthorizationCredentials | None,
-        Depends(HTTPBearer(description="Please provide AUTH_SECRET api key.", auto_error=False)),
+        Depends(
+            HTTPBearer(
+                description="Please provide AUTH_SECRET api key.", auto_error=False
+            )
+        ),
     ],
 ) -> None:
     if not settings.AUTH_SECRET:
@@ -64,11 +68,38 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # context manager will clean up the AsyncSqliteSaver on exit
 
 
-app = FastAPI(lifespan=lifespan)
+tags_metadata = [
+    {
+        "name": "INFO",
+        "description": "Service Information: This **INFO** endpoint provides metadata about the service, including available agents and models.",
+        "externalDocs": {
+            "description": "Get more info",
+            "url": "http://localhost:8080/info",
+        },
+    },
+    {
+        "name": "API",
+        "description": "API: This **API** endpoint allows you to interact with the service by invoking agents.",
+        "externalDocs": {
+            "description": "Invoke an agent",
+            "url": "http://localhost:8080/invoke",
+        },
+    },
+]
+
+
+app = FastAPI(
+    lifespan=lifespan,
+    title="EDP Agent Service",
+    description="EDP Agent Service API",
+    version="0.1.0",
+    swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
+    openapi_tags=tags_metadata,
+)
 router = APIRouter(dependencies=[Depends(verify_bearer)])
 
 
-@router.get("/info")
+@router.get("/info", tags=["INFO"])
 async def info() -> ServiceMetadata:
     models = list(settings.AVAILABLE_MODELS)
     models.sort()
@@ -86,14 +117,15 @@ def _parse_input(user_input: UserInput) -> tuple[dict[str, Any], UUID]:
     kwargs = {
         "input": {"messages": [HumanMessage(content=user_input.message)]},
         "config": RunnableConfig(
-            configurable={"thread_id": thread_id, "model": user_input.model}, run_id=run_id
+            configurable={"thread_id": thread_id, "model": user_input.model},
+            run_id=run_id,
         ),
     }
     return kwargs, run_id
 
 
-@router.post("/{agent_id}/invoke")
-@router.post("/invoke")
+@router.post("/{agent_id}/invoke", tags=["API"])
+@router.post("/invoke", tags=["API"])
 async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatMessage:
     """
     Invoke an agent with user input to retrieve a final response.
@@ -142,7 +174,9 @@ async def message_generator(
             new_messages = event["data"]["output"]["messages"]
 
         # Also yield intermediate messages from agents.utils.CustomData.adispatch().
-        if event["event"] == "on_custom_event" and "custom_data_dispatch" in event.get("tags", []):
+        if event["event"] == "on_custom_event" and "custom_data_dispatch" in event.get(
+            "tags", []
+        ):
             new_messages = [event["data"]]
 
         for message in new_messages:
@@ -154,7 +188,10 @@ async def message_generator(
                 yield f"data: {json.dumps({'type': 'error', 'content': 'Unexpected error'})}\n\n"
                 continue
             # LangGraph re-sends the input message, which feels weird, so drop it
-            if chat_message.type == "human" and chat_message.content == user_input.message:
+            if (
+                chat_message.type == "human"
+                and chat_message.content == user_input.message
+            ):
                 continue
             yield f"data: {json.dumps({'type': 'message', 'content': chat_message.model_dump()})}\n\n"
 
@@ -190,10 +227,20 @@ def _sse_response_example() -> dict[int, Any]:
 
 
 @router.post(
-    "/{agent_id}/stream", response_class=StreamingResponse, responses=_sse_response_example()
+    "/{agent_id}/stream",
+    response_class=StreamingResponse,
+    responses=_sse_response_example(),
+    tags=["API"],
 )
-@router.post("/stream", response_class=StreamingResponse, responses=_sse_response_example())
-async def stream(user_input: StreamInput, agent_id: str = DEFAULT_AGENT) -> StreamingResponse:
+@router.post(
+    "/stream",
+    response_class=StreamingResponse,
+    responses=_sse_response_example(),
+    tags=["API"],
+)
+async def stream(
+    user_input: StreamInput, agent_id: str = DEFAULT_AGENT
+) -> StreamingResponse:
     """
     Stream an agent's response to a user input, including intermediate messages and tokens.
 
@@ -209,7 +256,7 @@ async def stream(user_input: StreamInput, agent_id: str = DEFAULT_AGENT) -> Stre
     )
 
 
-@router.post("/feedback")
+@router.post("/feedback", tags=["INFO"])
 async def feedback(feedback: Feedback) -> FeedbackResponse:
     """
     Record feedback for a run to LangSmith.
@@ -229,7 +276,7 @@ async def feedback(feedback: Feedback) -> FeedbackResponse:
     return FeedbackResponse()
 
 
-@router.post("/history")
+@router.post("/history", tags=["INFO"])
 def history(input: ChatHistoryInput) -> ChatHistory:
     """
     Get chat history.
@@ -245,14 +292,16 @@ def history(input: ChatHistoryInput) -> ChatHistory:
             )
         )
         messages: list[AnyMessage] = state_snapshot.values["messages"]
-        chat_messages: list[ChatMessage] = [langchain_to_chat_message(m) for m in messages]
+        chat_messages: list[ChatMessage] = [
+            langchain_to_chat_message(m) for m in messages
+        ]
         return ChatHistory(messages=chat_messages)
     except Exception as e:
         logger.error(f"An exception occurred: {e}")
         raise HTTPException(status_code=500, detail="Unexpected error")
 
 
-@app.get("/health")
+@app.get("/health", tags=["INFO"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}

@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from langgraph.graph.state import CompiledStateGraph
 
 from agents.bg_task_agent.bg_task_agent import bg_task_agent
-from agents.chat_service import chat
+
+# from agents.chat_service import chat
 from agents.edp_assistant import edp_assistant
 from schema import AgentInfo
 
@@ -17,7 +18,7 @@ class Agent:
 
 
 agents: dict[str, Agent] = {
-    "chat": Agent(description="A simple chatbot.", graph=chat),
+    # "chat": Agent(description="A simple chatbot.", graph=chat),
     "edp-assistant": Agent(
         description="A research assistant with web search and calculator.",
         graph=edp_assistant,

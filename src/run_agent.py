@@ -33,7 +33,7 @@ async def main() -> None:
     # uv add pygraphviz
     # pip install pygraphviz
 
-    agent.get_graph().draw_png("agent_diagram.png")
+    # agent.get_graph().draw_png("agent_diagram.png")
 
 
 if __name__ == "__main__":

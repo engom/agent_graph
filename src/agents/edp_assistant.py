@@ -1,11 +1,7 @@
-import warnings
 from datetime import datetime
+from functools import lru_cache
 from typing import Literal, Optional
 
-warnings.filterwarnings("ignore", message="'api' backend is deprecated")
-
-from langchain_community.tools import DuckDuckGoSearchResults
-from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import (
@@ -18,8 +14,12 @@ from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.managed import RemainingSteps
 from langgraph.prebuilt import ToolNode
 
-from agents.tools import calculator, code_generator
 from core import llm, settings
+
+from .tools import setup_tools
+
+# Optimize model initialization
+model_cache = {}
 
 
 class AgentState(MessagesState, total=False):
@@ -28,25 +28,12 @@ class AgentState(MessagesState, total=False):
     remaining_steps: RemainingSteps
 
 
-def setup_tools():
-    """Initialize and configure tools with error handling."""
-    try:
-        wrapper = DuckDuckGoSearchAPIWrapper(
-            safesearch="moderate",
-            backend="auto",
-        )
-        web_search = DuckDuckGoSearchResults(name="WebSearch")  #  api_wrapper=wrapper)
-        return [code_generator, web_search]
-    except Exception as e:
-        print(f"Error setting up tools: {e}")
-        return [calculator]
-
-
 def get_system_instructions() -> str:
     """Generate system instructions with current date and EDP/SolveBio expression generating capabilities."""
-    return f"""
-    You are a helpful EDP coding assistant with expertise in data processing expressions and web search capabilities.
+    base = """## Role
+    You are an EDP/SolveBio expressionq coding specialist with web search access.
     
+    ## Context
     **EDP/SolveBio Expressions** are Python-like formulas used in the QuartzBio platform for data manipulation, analysis, and querying. Key points include:
 
     1. **Purpose**: Designed to pull data, calculate statistics, and run algorithms within the QuartzBio EDP platform.
@@ -81,28 +68,52 @@ def get_system_instructions() -> str:
         * Follow SolveBio expression syntax rules
         * Provide clear comments for complex expressions
         
-    - Output the final should be a valid EDP/SolveBio expression and/or a web search result.
-    - If the user asks for a web search, use the web search tool to find the information and return the result.
-    - If the user asks for a calculation, use the calculator tool to perform the calculation and return the result.
-    - If the user asks for an EDP expression, generate the expression and return the result using code generator tool.
-    - If the user asks for a code snippet, use the code generator tool to generate the code and return the result.
+    You have access to a set of tools you can use to solve tasks.
+
+    ## Capabilities
+    You can generate EDP/SolveBio expressions, answer questions, and provide calculations.
+
+    ## Tools
+    You have access to a code_generator tool, and web search tool.
     
-    The final response should include:
-      * expression in SolveBio syntax.
-      * explanation of the expression.
-      
+    ## Response Protocol
+    1. For math questions:
+    - Calculator tool → plain text result
+    Example: "The result of 300 * 200 is 60,000"
+
+    2. For code generation:
+    - Code block with SolveBio syntax
+    - Line-by-line explanation
+    Example: 
+    ```solvebio
+    dataset_field_stats('patients', 'age')  # Get age statistics for patients dataset
+    # Output: {'min': 18, 'max': 65, 'mean': 35.5, 'stddev': 10.5}
+    
+    record["a"] + " world" # String expression with context: {"record": {"a": "hello"}}
+    # output: "hello world"
+    
+    # Numeric expression using a SolveBio function
+    dataset_field_stats("solvebio:public:/ClinVar/3.7.4-2017-01-30/Combined-GRCh37", "review_status_star")["avg"]
+    # output: 0.883874789018
+    ```
     """
+    return f"{base}\nCurrent Date: {datetime.now().isoformat()[:10]}"
 
 
+# Cache the model to avoid reinitializing it on every call
 def wrap_model(model: BaseChatModel) -> RunnableSerializable[AgentState, AIMessage]:
     """Wrap the model with tools and system instructions."""
-    model = model.bind_tools(setup_tools(), tool_choice="auto")
+    if model.model_id not in model_cache:
+        model_cache[model.model_id] = model.bind_tools(
+            tools=setup_tools(),
+            tool_choice="auto",
+        )
     preprocessor = RunnableLambda(
         lambda state: [SystemMessage(content=get_system_instructions())]
         + state["messages"],
         name="StateModifier",
     )
-    return preprocessor | model
+    return preprocessor | model_cache[model.model_id]  # model
 
 
 async def acall_model(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -123,16 +134,47 @@ async def acall_model(state: AgentState, config: RunnableConfig) -> AgentState:
                 ]
             }
         return {"messages": state["messages"] + [response]}
+
+    # except Exception as e:
+    #     error_message = f"Error processing request: {str(e)}"
+    #     return {
+    #         "messages": state["messages"]
+    #         + [
+    #             AIMessage(
+    #                 content=error_message,
+    #             )
+    #         ]
+    #     }
+
     except Exception as e:
-        error_message = f"Error processing request: {str(e)}"
+        # Error handling for common exceptions
+        if "ModelTimeoutError" in str(e):
+            error_type = "MODEL_TIMEOUT"
+        elif "AccessDeniedException" in str(e):
+            error_type = "AWS_PERMISSION"
+        else:
+            error_type = "DEFAULT"
+            # f"Error processing request: {str(e)}"
+
+        # Structured error response
         return {
             "messages": state["messages"]
             + [
                 AIMessage(
-                    content=error_message,
+                    content=format_user_error(error_type),
+                    metadata={"error": error_type},
                 )
             ]
         }
+
+
+def format_user_error(error_type: str) -> str:
+    errors = {
+        "MODEL_TIMEOUT": "Apologies, the response took too long. Please try a simpler query.",
+        "AWS_PERMISSION": "Authorization issue detected.",
+        "DEFAULT": "Unable to process request.",
+    }
+    return errors.get(error_type, errors["DEFAULT"])
 
 
 def pending_tool_calls(state: AgentState) -> Literal["tools", "done"]:
@@ -164,8 +206,8 @@ def create_agent() -> StateGraph:
         "model",
         pending_tool_calls,
         {
-            "tools": "tools",  # If tools are needed, go to tools node
-            "done": END,  # If no tools needed, end the conversation
+            "tools": "tools",
+            "done": END,
         },
     )
 
@@ -177,10 +219,3 @@ def create_agent() -> StateGraph:
 
 # Initialize the agent
 edp_assistant = create_agent().compile(checkpointer=MemorySaver())
-
-
-# The graph now follows this flow:
-# Start → Model
-# Model → Tools (if tool calls present)
-# Tools → Model (to process tool results)
-# Model → End (if no more tool calls)
